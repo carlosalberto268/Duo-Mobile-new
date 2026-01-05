@@ -9,13 +9,16 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+
 import { GradientBackground } from '@/components/layout';
 import { GlassCard, Input, Dropdown } from '@/components/ui';
 import { GradientButton } from '@/components/ui/GradientButton';
+
 import { Colors, Spacing, Typography, BorderRadius } from '@/constants/theme';
 import {
   TRANSACTION_TYPES,
@@ -24,11 +27,16 @@ import {
   PAYMENT_METHODS,
 } from '@/constants/data';
 
+import { createTransaction } from '@/services/transactions.service';
+
 export default function AddTransactionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [transactionType, setTransactionType] = useState<'expense' | 'income'>('expense');
+  const [loading, setLoading] = useState(false);
+
+  const [transactionType, setTransactionType] =
+    useState<'expense' | 'income'>('expense');
   const [value, setValue] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
@@ -41,17 +49,51 @@ export default function AddTransactionScreen() {
   const [paymentDate, setPaymentDate] = useState('');
   const [dueDate, setDueDate] = useState('');
 
-  const selectedPaymentMethod = PAYMENT_METHODS.find((m) => m.label === paymentMethod);
+  const selectedPaymentMethod = PAYMENT_METHODS.find(
+    (m) => m.label === paymentMethod
+  );
   const needsAccount = selectedPaymentMethod?.needsAccount ?? false;
 
-  // Mock data - replace with real data from context/database
-  const accounts = ['Nubank - Conta', 'Inter - Poupança', 'Nubank Ultravioleta', 'XP Visa Infinite'];
-  const paidByOptions = ['João Silva', 'Maria Santos', 'Compartilhado']; // Mock couple names
+  // Mock data — depois virá da API
+  const accounts = [
+    'Nubank - Conta',
+    'Inter - Poupança',
+    'Nubank Ultravioleta',
+    'XP Visa Infinite',
+  ];
 
-  const handleSave = () => {
-    // Implement save logic
-    console.log('Saving transaction...');
-    router.back();
+  const paidByOptions = ['João Silva', 'Maria Santos', 'Compartilhado'];
+
+  const handleSave = async () => {
+    if (!value || !category) {
+      Alert.alert('Erro', 'Preencha os campos obrigatórios');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      await createTransaction({
+        type: transactionType,
+        value: Number(value.replace(',', '.')),
+        description,
+        category,
+        expenseType: transactionType === 'expense' ? expenseType : null,
+        paidBy: transactionType === 'expense' ? paidBy : null,
+        isFixed,
+        repeatCount: isFixed ? Number(repeatCount) : null,
+        paymentMethod,
+        account,
+        paymentDate,
+        dueDate: transactionType === 'expense' ? dueDate : null,
+      });
+
+      router.back();
+    } catch (error) {
+      Alert.alert('Erro', 'Não foi possível salvar a transação');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -77,12 +119,15 @@ export default function AddTransactionScreen() {
                   backgroundColor: type.color,
                 },
               ]}
-              onPress={() => setTransactionType(type.id as 'expense' | 'income')}
+              onPress={() =>
+                setTransactionType(type.id as 'expense' | 'income')
+              }
             >
               <Text
                 style={[
                   styles.typeButtonText,
-                  transactionType === type.id && styles.typeButtonTextActive,
+                  transactionType === type.id &&
+                    styles.typeButtonTextActive,
                 ]}
               >
                 {type.label}
@@ -116,7 +161,11 @@ export default function AddTransactionScreen() {
             <Dropdown
               label="Categoria"
               value={category}
-              options={transactionType === 'expense' ? CATEGORIES.expense : CATEGORIES.income}
+              options={
+                transactionType === 'expense'
+                  ? CATEGORIES.expense
+                  : CATEGORIES.income
+              }
               onSelect={setCategory}
               placeholder="Selecione uma categoria"
             />
@@ -205,8 +254,9 @@ export default function AddTransactionScreen() {
           </GlassCard>
 
           <GradientButton
-            title="Salvar Transação"
+            title={loading ? 'Salvando...' : 'Salvar Transação'}
             onPress={handleSave}
+            disabled={loading}
             style={styles.saveButton}
           />
         </ScrollView>
